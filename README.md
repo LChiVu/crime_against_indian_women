@@ -1,4 +1,4 @@
-## Understanding Violence Against Women in India: An Analysis of Crime Data (2001-2014)**
+## Understanding Violence Against Women in India: An Analysis of Crime Data (2001-2014)
 
 ### Author Information
 - **Name:** Chi Vu
