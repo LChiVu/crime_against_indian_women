@@ -1,0 +1,183 @@
+---
+title: "DA 101 Final Project Draft"
+author: "Chi Vu"
+date: "12/15/2022"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(stringr)
+library(broom)
+library(knitr)
+crime_vs_wag <- read_csv('./data/crimes_against_women_2001-2014.csv')
+
+```
+
+## Introduction
+
+The dataset, Crime Against Women 2001-2014 (India), showcases the number of crime cases committed against women in India between 2001 and 2014.  It has state/union territories(UTs) and district level data on 7 types of crime against women: rape, kidnapping and abduction, dowry deaths, assault on women with intent to outrage their modesty, insult to women's modesty, cruelty by husband or his relatives, and importation of girls. The data was collected by the Indian National Crime Records Bureau. From this data, I hope to answer my research question of what is the most common type of violence against India women and girls.
+
+Even though the dataset I am using was retrieved from a project from author Greeshma on ["kaggle"](https://www.kaggle.com/datasets/greeshmagirish/crime-against-women-20012014-india), the data itself was collected from the Indian government's official [website](https://data.gov.in). This website, called the Open Government Data, is developed and hosted by India's National Informatics Centre, a information and communications technology organization under the Ministry of Electronics & Information Technology (“Open Government Data (OGD) Platform India”). This is where the public can access government-owneed data  about multitude of areas: health and family welfare, biotechnology, social development, travel and tourism, etc. (“Open Government Data (OGD) Platform India”). 
+
+
+## Ethical Considerations
+
+The most important stakeholders of my data analysis is Indian women and girls. Since the data was collected by the National Crime Records Bureau, which is under the aegis of Indian Ministry of Home Affairs, I believe that the data only shows the number of crime cases that are reported to authority, leaving the silent victims out the picture. Therefore, when looking at this data, even though they are mere numbers, I see them as a time one brave woman or girl stands up against abuse and violence. Understanding how much is at stake for them to do so makes me feel responsible to report the data as accurately as I can. Further, in observations where the crime number is zero, I am more inclined to think that violence were not reported or kept under wraps, rather than that there were none committed in the area in that year.
+
+
+## Data Explanation and Exploration 
+
+The first thing to notice about the dataset is how data is divided in many layers: State/UT, districts, year, and types of crime. This poses an advantage as well as challenge when analysis the data. On one hand,  it gives the data a level of detail that is very helpful in conducting regionally and/or timely specific analysis. On the other hand, the extra layers complicate analysis as it harder to aggregate data. Further, in the dataset, the names for the states, union territories and districts were not uniform, with some in all uppercase letters, some with different spacing and some with spelling errors. It is important to properly clean them up as clean data means fewer calculation errors and duplicates. After cleaning up, the state and UT names went from 72 to 36, matching the actual number of states and UTs in India (“Vikaspedia”). In terms of districts, the dataset has more than 1000 names while there are 736 districts in India (“Vikaspedia”).Cleaning up all the names for the districts would be time-consuming past the scope of the project, plus the divisions into district would only add complications to any analysis I plan to do. Therefore, instead of focusing on the district level data, I choose to work with the cumulative crime case total from all the districts in a state/UT.
+
+
+```{r dataframes setup}
+#cleaning up variable names for `STATE/UT` and `DISTRICT`
+crime_vs_wag$'STATE/UT' <- 
+  tolower(crime_vs_wag$'STATE/UT') %>%
+  str_to_title() %>%
+  str_replace("A & N", "A&N") %>%
+  str_replace("D & N", "D&N") %>%
+  str_replace("Delhi Ut", "Delhi")
+
+crime_vs_wag$'DISTRICT' <- 
+  tolower(crime_vs_wag$'DISTRICT') %>%
+  str_to_title() %>%
+  replace(str_which(.,"Total"), "Total") 
+#not very clean for district names because will only focus on state's total number of cases in project 
+
+crime_vs_wag$Year <- as.character(crime_vs_wag$Year)
+#changing `Year` into character type rather than numeric
+caw_Total <- filter(crime_vs_wag, crime_vs_wag$'DISTRICT' == "Total" )
+
+caw_year_total <- caw_Total%>%
+  select(-c(`...1`, `STATE/UT`, `DISTRICT`)) %>%
+  group_by(Year) %>%
+  summarise_each(funs(sum)) %>%
+  mutate(`Total Crime` = rowSums(across(where(is.numeric))))
+#total number of crime case, grouped by year
+
+caw_state_year_total <- caw_Total %>%
+  select(-c(`...1`, `DISTRICT`)) %>%
+  group_by(`STATE/UT`,Year) %>%
+  summarise_each(funs(sum)) %>%
+  mutate(`Total Crime` = rowSums(across(where(is.numeric))))
+#total number of crime case, grouped by state and year
+```
+
+
+```{r visual1 - total crime over time, fig.width=10,fig.height=5}
+
+cawyeartotal_mod <- data.frame(
+  Year = caw_year_total$Year,                            
+  Number = c(caw_year_total$Rape, caw_year_total$`Kidnapping and Abduction`,caw_year_total$`Dowry Deaths`, caw_year_total$`Assault on women with intent to outrage her modesty`, caw_year_total$`Insult to modesty of Women`, caw_year_total$`Cruelty by Husband or his Relatives`, caw_year_total$`Importation of Girls`, caw_year_total$`Total Crime`),
+  group = c(rep("Rape", nrow(caw_year_total)),
+            rep("Kidnapping and Abduction", nrow(caw_year_total)),
+            rep("Dowry Deaths", nrow(caw_year_total)),
+            rep("Assault on women with intent to outrage her modesty", nrow(caw_year_total)),
+            rep("Insult to modesty of Women", nrow(caw_year_total)),
+            rep("Cruelty by Husband or his Relatives", nrow(caw_year_total)),
+            rep("Importation of Girls", nrow(caw_year_total)),
+            rep("Total Crime", nrow(caw_year_total))))
+
+ggplot(cawyeartotal_mod, aes(x=Year, y= Number, group=group, col=group)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = scales::comma) + 
+  labs(x="Year", y= "Number of Cases", title= "Fig 1. Cases of Crime against Women in India over time from 2001 to 2014, divided by Type", color = "Crime") +
+  theme(text=element_text(size=13), legend.text=element_text(size=8))
+```
+
+The line graph above shows the changes in the total number of crimes, of each type and cumulatively, in India from 2001 to 2014. Interestingly, there is a spike in the number of cases in all types of violence and cumulatively from 2012 to 2014. The common upward trend potentially shows two things. It is either showing a concerning trend of violence against women in the country, or the data is getting more accurate as women are more inclined to speak up as time passes. 
+
+
+```{r visual2 - percent of husband cruelty, fig.width=10,fig.height=5}
+cawyearcrime_mod <- filter(cawyeartotal_mod, cawyeartotal_mod$group != "Total Crime")
+ggplot(cawyearcrime_mod, aes(fill=group, y=Number, x=Year)) + 
+  geom_bar(position="fill", stat="identity") +
+  theme(text=element_text(size=13)) +
+  labs(x="Year", y= "Percentage", title= "Fig 2. Cases of Crime against Women in India over time from 2001 to 2014, in Percentage", color = "Crime") +
+  scale_y_continuous(labels=scales::percent) 
+```
+
+Figure 2 shows how each type of crime make up the total number of violent cases against women in India from 2001 to 2014. Cruelty by husband and his relatives is the most common cause of violence, taking up around 40-45% of total number of cases, followed by assault on women intent on outrage her modesty 20-25%. This aligns with the line graph shown above, where the line for husband cruelty reached around 125,000 cases and assault on women intent on outrage her modesty reached around 82,000 cases out of around 310,000 cases in total in 2014.
+
+
+## Statistical Analysis and Interpretation
+
+Now that we can see the most common type of violence towards women in India comes from their husbands and their relatives, I am curious to see if there is a correlation between that violence and dowry deaths. To be more clear, dowry deaths are deaths of married women who are murdered or commits suicide because of her husband and his family's dissatisfaction with the dowry (Chaudhary). `cor.test()` is typically the first function we should use to test the correlation between the two variables.
+
+```{r model1}
+cor.test(caw_Total$`Dowry Deaths`, caw_Total$`Cruelty by Husband or his Relatives`)
+knitr::kable(tidy(cor.test(caw_Total$`Dowry Deaths`, caw_Total$`Cruelty by Husband or his Relatives`)))
+```
+
+In this correlation test, we can see a very low p-value of less than 2.2e-16, giving us confidence that there is a correlation between the cruelty of husband and his relative and dowry deaths. The coefficient of 0.4863252 indicates a moderate positive correlation between the two variables, meaning as one variable increases one unit, the other increases by almost half a unit. Further, the coefficient falls very near in the middle of the range of the 95% confidence interval between 0.4157 and 0.5511 - we can assume that the correlation value is accurate.
+
+
+```{r model2 - correlation between husband crimes}
+lm_husband <- lm(`Cruelty by Husband or his Relatives`~`Dowry Deaths`, data = caw_Total)
+summary(lm_husband)
+```
+
+We are using the linear regression model to predict the case numbers of dowry deaths based on the violence by husband or his relatives. The model is solving the equation Y = a + bX, where Y is the dependent variable of dowry deaths, and X is the explanatory variable of husband cruelty. The intercept, a = 1340.379, typically shows the value of y when x is zero. The coefficient b is 4.259, representing a positive slope of the regression line. Based on this model, we can essentially say that when there is no case of husbands and their relatives abuse on women, the number of dowry deaths would still be around 1340 cases. However, this model can only explain 23.5% of the data, according to the adjusted R-squared score of 0.235. This score measures how close the data is to the fitted regression line, or how well the model is making a prediction. Additionally, in a regression model, the p-value expresses the statistical significance of the sample’s relationship with the slope of a particular coefficient. The p-value for this model is significantly small (less than 2.2e-16). This means that we can be fairly confident what our null hypothesis of dowry deaths being independent of husbands and their relatives violence against women is correct.
+
+```{r visual3 - husband crimes }
+ggplot(caw_Total, aes(y=`Dowry Deaths`, x=`Cruelty by Husband or his Relatives`)) + 
+  geom_point() +
+  geom_smooth(method = "lm") + 
+  labs(title="Fig 3. Dowry Deaths and Husband Cruelty in India", caption="Linear regression model, plotted")
+```
+
+From the correlation test and regression model done above, we can visualize the relationship between cruelty of husband toward wife and dowry death as shown in the graph above. The graph is a scatter plot where each point is an ordered pair of data from the two variables, with the line of best fit in blue that goes through the maximum number of points, showing the pattern between the two variables using the linear regression method. The gray section around the line shows the confidence interval, or the uncertainty of the regression model. The bigger the gray area, the bigger the uncertainty, the less confident the model is about if the values would fall in the line of best fit. In this graph, we can see the gray area expanding as the data of two variables get bigger. With very to none gray area around 5000 cruelty cases and 500 dowry deaths, the model is very confident about the linear relationship; but as the number of cases of the two types increases to around 20000 cruelty cases and 2500 dowry deaths, the model is much less certain.
+
+```{r visual4}
+ggplot(caw_Total, aes(x = lm_husband$residuals)) +
+  geom_histogram(bins = 20) + 
+  labs(x="Residuals", y="Count", title="Histogram of Residuals in Husband Violence Regression Model", caption="Residual = Prediction - Actual Value") 
+```
+
+To measure how different the actual value from the data is from the predicted value of the regression model, we can look at the residuals of the model. Residual equals predicted value minus actual values, or the distance between one given point in the scatterplot and the line of best fit. Therefore, when a residual is positive, the prediction is larger than the actual value, and vice versa with negative residual. The plot is a histogram of the residuals of the linear regression model conducted above, visualising the distribution of the residuals by dividing the them into bins and counting the number of observations in each bin. As we can see from this histogram, the residuals in this model does not have a normal distribution - it is rather right-skewed. The big majority of residuals is negative while the positive residual can go up 15000, with an extreme outlier of 20000. This means that the actual values from the two variables are often larger than the value the regression model predicts.
+
+```{r visual - dowry death}
+par(mfrow=c(2,2))
+plot(lm_husband) 
+```
+
+The top two plots of model diagnostics further substantiates the non-normal distribution of this model's residuals. The top left graph plots the model's residuals and their line of best fit in red, which we can see is right-skewed. The top right plot is a Q-Q (quantile-quantile) plot, which takes the data, sorts it in ascending order, and then plots them versus quantiles, data points below which a proportion of my data falls, from a theoretically normal distribution (Ford). The points in this Q-Q plot curve upward drastically on the right, indicating a right-skewed distribution.
+
+
+## Conclusions
+
+In conclusion, this project was developed from my initial research question of what is the most common type of violence women in India face. From the dataset, I found cruelty of husband and his relatives to be the top instance of violence, which led me to be curious about the other violence committed by husbands against Indian women, dowry deaths. The project turns out to be find the correlation between the two crimes, to see if we can predict the cases of dowry death in a state or UT with the number of husband cruelty case. The results of the correlation test and linear regression model suggest that even though there is a moderate positive correlation between the two types of crime, it is unlikely to yield accurate dowry death prediction in a given India state or UT with the number of cruelty from husband and his relatives against women. One future direction I could see future analyst do with this project is breaking this analysis down into each state/UT, aiming to answer the question of whether the places of residence increases a woman's chance of being abused, or even driven to death, by her husband.
+
+I take into consideration the fact that the data was collected by the National Crime Records Bureau, which is under the aegis of Indian Ministry of Home Affairs. This gives me the impression that the data only shows the number of crime cases that are reported to authority, leaving the silent victims out the picture. They may not have reported the crime for fear of further abuse, exposure of privacy, harm to family's and their own reputation, damage to their family's and children's future, etc. For this reason, the actual number of crimes committed against women and girls in India may be bigger, but we cannot know by how much. My impression was proved correct as a 2022 BBC article, reporting the same issues about violence against women using the same data source of the National Crime Records Bureau from 2016 to 2022, raised the same concern. "Activists say the rising graph is a matter of serious concern, but authorities say it's because there's better reporting now and more people are going to the police to register cases" (Pandey). Further, the article points out the underlying reason why women and victims are hesitant to report violence to the authority -  for fear of "stigmatised by the society", "shamed by the police and judiciary," and the pain of seeing offenders being freed from jail (Pandey). Additionally, the article found the same trend in violence against Indian women as my findings, reporting a consistent increase in total crime from 2016 to 2022.
+
+
+## Reflection 
+
+The rules that really helped me to keep track of this final project were organizing project, naming variables, and commenting on codes. In terms of organizing the project, putting all documents and data sets in their respective folder not only makes my environment cleaner, but also quickens the file navigating process. When naming variables and data frames, I made sure all names are  efficient and semantic. The goal was to displaying the content of the variable and its difference to other variables in as little words as possible. I also used underscore in between words to make the names readable. Finally, commenting on codes was the rule that I thought helped me the most. My approach to this was writing down the comment first, establishing my goal with a particular code. This helps me not get distracted from what I wanted the results to be. I was also flexible in terms of accepting new findings: if the code returned something I did not initially had in mind but made sense, I would keep it. This is what happened with the `caw_year_total` data frame, where it was a happy accident of me forgetting the `STATE/UT` variable in the `group_by()` function. All the rules above were followed with reproducibility in mind, making it easy for whoever looking my project to understand and replicate. I also created a table of content and code book for easy reference and polish.
+
+Also, in interpreting the statistics and presenting findings, I positioned myself as someone with no data analytics experience to write in as plain a language as possible. During this final project, I have realized that even though I do have an understanding of the numbers in regression models, correlation tests and graphs, putting them into words was much harder than I thought, not to mention in plain English. Therefore, I looked online to consult how people present findings and interpret models in simple language for a broad audience and made changes according to my understanding. 
+
+I think my most effective data visualization was Figure 1, the line chart showing changes in crime cases over time. The close second would be Figure 2, the bar chart showing types of crime broken into percentage. They are both simple descriptive statistics but I think that simpleness is what makes them most effective to the majority of people. Any one can take a look at the first graph to see the upward trend of crime against women in India over time and at the second graph to see the make-up of each type of crime.
+
+
+## Works Cited 
+Chaudhary, Surbhi. “Dowry and Dowry Death.” Times of India Blog, 15 Apr. 2022, timesofindia.indiatimes.com/readersblog/politiclaw/dowry-and-dowry-death-42574/.
+
+Ford, Clay. “Understanding Q-Q Plots | University of Virginia Library Research Data Services + Sciences.” University of Virginia Library, 26 Aug. 2015, data.library.virginia.edu/understanding-q-q-plots/.
+
+Greeshma. “Crime against Women 2001-2014 (India).” Kaggle, 2019, www.kaggle.com/datasets/greeshmagirish/crime-against-women-20012014-india.
+
+“Open Government Data (OGD) Platform India.” Open Government Data (OGD) Platform India, 21 Jan. 2022, data.gov.in/about-us.
+
+Pandey, Geeta. “Rising Crimes against Indian Women in Five Charts.” BBC News, 12 Sept. 2022, www.bbc.com/news/world-asia-india-62830634.
+
+“Vikaspedia.” Vikaspedia.in, 2022, vikaspedia.in/education/current-affairs/states-and-districts-of-india.
